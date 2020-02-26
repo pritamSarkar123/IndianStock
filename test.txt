@@ -1,0 +1,127 @@
+import pandas as pd
+from sklearn.preprocessing import MinMaxScaler
+import numpy as np
+import keras
+import matplotlib.pyplot as plt
+import os
+import datetime as dt
+from datetime import date
+import pandas_datareader.data as web
+from matplotlib import style
+style.use('ggplot')
+
+def date_prep():
+    today=date.today()
+    d1 = today.strftime("%d/%m/%Y")
+    d=d1.split('/')
+    day=int(d[0])
+    month=int(d[1])
+    year=int(d[2])
+    year_1=year-1
+    end = dt.datetime(year, month, day)
+    if (month==4 and day==31) or (month==6 and day==31) or (month==9 and day==31) or (month==11 and day==31):
+        start = dt.datetime(year_1, month, day-1)
+    else:
+        if month==2 and day==29 and not (((year_1 % 4 == 0) and (year_1 % 100 != 0)) or (year_1 % 400 == 0)):
+            start = dt.datetime(year_1, month, day-1)
+        else:
+            start = dt.datetime(year_1, month, day)
+    return start,end
+
+def prepare_csv(comp_name):
+    start,end=date_prep()
+    try:
+        df = web.DataReader(comp_name, 'yahoo', start, end)
+        df.to_csv('{}.csv'.format(comp_name),index=False)
+    except Exception as e:
+        print(e)
+
+def plot_5_type_pred(predict1,predict2,predict3,predict4,predict5,comp_name):
+    plt.figure(figsize=(20, 10))
+    plt.plot(predict1, color='red', label='Predicted Stock Price of {} last few days by model1'.format(comp_name))
+    plt.plot(predict2, color='blue', label='Predicted Stock Price of {} last few days by model2'.format(comp_name))
+    plt.plot(predict3, color='yellow', label='Predicted Stock Price of {} last few days by model3'.format(comp_name))
+    plt.plot(predict4, color='black', label='Predicted Stock Price of {} last few days by model4'.format(comp_name))
+    plt.plot(predict5, color='orange', label='Predicted Stock Price of {} last few days by model5'.format(comp_name))
+    plt.title('Stock Price of ' + comp_name)
+    plt.xlabel('Time days')
+    plt.ylabel('Rupees')
+    plt.legend()
+    plt.grid(color='black', linestyle='--', linewidth=1)
+    plt.show()
+
+def predict_stock():
+    comp_name = input("Enter the company name ")
+    comp_name = comp_name.upper()
+    prepare_csv(comp_name)
+    df = pd.read_csv(comp_name + '.csv')
+    
+        
+    df = pd.read_csv('SBIN.NS.csv')
+    value = df.iloc[-60:,].values
+    value_unchanged = df.iloc[-60:,-1].values
+    value_last = df.iloc[-1:,-1].values
+    
+    sc = MinMaxScaler()
+    sc.fit(value)
+    value_scaled = sc.fit_transform(value)
+    value_scaled=np.array(value_scaled)
+    value_scaled=np.reshape(value_scaled,(-1, value_scaled.shape[0], 6))
+    
+    sc1=MinMaxScaler()
+    value_unchanged=np.reshape(value_unchanged,(-1,1))
+    sc1.fit(value_unchanged)
+    sc1.fit_transform(value_unchanged)
+    
+    predict1=[]
+    predict1.append(value_last[0])
+    for i in range(1,8):
+        m=keras.models.load_model('StockPredictorSBIN.NS{}.model'.format(i))
+        pred=m.predict(value_scaled)
+        sc1.inverse_transform(pred)
+        predict1.append(pred)
+
+    predict2=[]
+    predict2.append(value_last[0])
+    for i in range(1,8):
+        m=keras.models.load_model('StockPredictorTCS.NS{}.model'.format(i))
+        pred=m.predict(value_scaled)
+        sc1.inverse_transform(pred)        
+        predict2.append(pred)
+    
+    predict3=[]
+    predict3.append(value_last[0])
+    for i in range(1,8):
+        m=keras.models.load_model('StockPredictorWIPRO.NS{}.model'.format(i))
+        pred=m.predict(value_scaled)
+        sc1.inverse_transform(pred)        
+        predict3.append(pred)
+    
+    predict4=[]
+    predict4.append(value_last[0])
+    for i in range(1,8):
+        m=keras.models.load_model('StockPredictorUNITEDBNK.BO{}.model'.format(i))
+        pred=m.predict(value_scaled)
+        sc1.inverse_transform(pred)
+        predict4.append(pred)
+    
+    predict5=[]
+    predict5.append(value_last[0])
+    for i in range(1,8):
+        m=keras.models.load_model('StockPredictorRELIANCE.NS{}.model'.format(i))
+        pred=m.predict(value_scaled)
+        sc1.inverse_transform(pred)
+        predict5.append(pred)
+    
+    print('prediction of next day closing stock of {}'.format(comp_name))
+    print('SBIN.NS model : {}'.format(predict1[1]))
+    print('TCS.NS model : {}'.format(predict2[1]))
+    print('WIPRO.NS model : {}'.format(predict3[1]))
+    print('UNITEDBNK.BO model : {}'.format(predict4[1]))
+    print('RELIANCE.NS model : {}'.format(predict5[1]))
+        
+    plot_5_type_pred(predict1,predict2,predict3,predict4,predict5,comp_name)
+    os.remove(comp_name + '.csv')
+
+
+predict_stock()
